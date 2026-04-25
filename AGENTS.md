@@ -46,3 +46,12 @@ podman network rm canary-network
 - 本仓库无构建、测试、lint 流程——这些在源码仓库完成
 - 无 CI/CD 配置
 - 应用镜像构建: `podman build -t xingye-site:stable .`（Dockerfile 从 `dist/bundle/` 复制到 `/app/`）
+
+## Git 操作
+
+main 分支已启用保护策略，详见 `docs/guide/git-branch-protection.md`。核心规则：
+
+- **禁止直接 push**，所有变更须通过 PR
+- **管理员可直接合并**，无需审批
+- **非管理员需要 1 人 approve**
+- 核心目录（`scripts/`、`nginx/`、`compose.*.yml`、`Dockerfile`、`infra/`）受 CODEOWNERS 保护
