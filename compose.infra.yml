@@ -1,0 +1,52 @@
+# 基础设施配置 — PostgreSQL + Redis
+# 无端口暴露，仅通过 canary-network 内部通信
+# 环境变量必须通过 --env-file 传入，不设默认值
+# 启动顺序：先启动此文件，再启动 production/canary
+# 应用内置重连机制，无需 depends_on 跨文件依赖
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: canary-redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes
+    volumes:
+      - canary-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - canary-network
+
+  postgres:
+    image: postgres:alpine
+    container_name: canary-postgres
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - canary-postgres-data:/var/lib/postgresql/data
+      - ./infra/init-db:/docker-entrypoint-initdb.d:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - canary-network
+
+volumes:
+  canary-redis-data:
+    driver: local
+  canary-postgres-data:
+    driver: local
+
+networks:
+  canary-network:
+    external: true

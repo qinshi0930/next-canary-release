@@ -1,0 +1,17 @@
+# 金丝雀环境 — canary 应用
+# Redis 使用 db0，与 stable 共享，确保 session 连续
+# 应用变量通过 env_file 整体传入，compose 变量替换仍需 --env-file
+services:
+  canary-app:
+    image: xingye-site:canary
+    container_name: canary-canary-app
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      HOSTNAME: "0.0.0.0"
+    networks:
+      - canary-network
+
+networks:
+  canary-network:
+    external: true
