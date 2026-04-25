@@ -1,0 +1,17 @@
+# CODEOWNERS - 核心文件必须由指定人员审查
+# 最后匹配原则：从上到下，最后一个匹配的行生效
+
+# scripts 目录 - 生产流量控制脚本，变更直接影响线上
+scripts/          @qinshi0930
+
+# compose 编排文件 - 容器生命周期管理
+compose.*.yml     @qinshi0930
+
+# Nginx 配置 - 流量路由
+nginx/            @qinshi0930
+
+# Dockerfile - 镜像构建定义
+Dockerfile        @qinshi0930
+
+# infra 目录 - 基础设施配置
+infra/            @qinshi0930
