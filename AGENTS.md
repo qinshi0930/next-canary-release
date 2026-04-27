@@ -55,7 +55,7 @@ docs/guide/
 
 ## Git 操作
 
-main 分支已启用保护策略，详见 `docs/guide/git-branch-protection.md`。核心规则：
+main 分支已启用保护策略，详见 `docs/rules/git-branch-protection.md`。核心规则：
 
 - **禁止直接 push**，所有变更须通过 PR
 - **管理员可直接合并**，无需审批
