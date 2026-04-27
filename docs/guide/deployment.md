@@ -1,21 +1,44 @@
-# 灰度部署指南
+# 灰度部署 — 项目结构构建
 
-从零部署基于 Podman Compose + Nginx 的灰度发布系统。
+从零创建灰度发布系统的全部配置文件。**仅负责文件生成，不启动服务。**
 
 ## 预设条件
 
 - 服务器已安装 `podman` 和 `podman-compose`
 - 应用构建产物 `dist/bundle/` 已就绪（Next.js standalone 输出）
 
-## 使用 opencode 部署
+## 前置检测（必须执行）
 
-**推荐的触发语句**（明确引用此文档，避免意外触发）：
+任一项不满足则**停止并提示用户**，不继续后续步骤。
 
-> "按照 docs/guide/deployment.md 部署，前缀 myapp，端口 6080"
+```bash
+# 1. 检查 podman
+which podman >/dev/null 2>&1 \
+  || { echo "❌ podman 未安装，请先执行: sudo apt install -y podman"; exit 1; }
+echo "✓ podman $(podman --version | grep -oP '\d+\.\d+\.\d+')"
 
-opencode 会读取本文档并按步骤执行：创建目录 → 生成密钥 → 写入配置文件 → 启动基础设施 → 构建镜像 → 启动生产环境。
+# 2. 检查 podman-compose
+which podman-compose >/dev/null 2>&1 \
+  || { echo "❌ podman-compose 未安装，请先执行: sudo apt install -y podman-compose"; exit 1; }
+echo "✓ podman-compose $(podman-compose --version 2>/dev/null | head -1)"
 
-以下步骤均可用 `opencode` 代替手动操作。将 `<PREFIX>` 替换为项目前缀（如 `myapp`），`<PORT>` 替换为监听端口（如 `6080`）。
+# 3. 检查端口未被占用
+ss -tlnp | grep -q ":${PORT} " \
+  && { echo "❌ 端口 ${PORT} 已被占用"; exit 1; } \
+  || echo "✓ 端口 ${PORT} 可用"
+```
+
+## 使用 opencode 构建
+
+**推荐的触发语句**（明确引用此文档）：
+
+> "按照 docs/guide/deployment.md 构建项目 myapp 端口 6080"
+
+opencode 会执行前置检测 → 生成密钥 → 写入全部配置文件，**不启动任何容器**。
+
+构建完成后，使用 `docs/guide/verification.md` 启动和验证服务。
+
+以下步骤均可用 `opencode` 代替手动操作。将 `<PREFIX>` 替换为项目前缀，`<PORT>` 替换为监听端口。
 
 ---
 
@@ -57,7 +80,7 @@ SUPABASE_SERVICE_ROLE_KEY=
 BETTER_AUTH_URL=
 EOF
 
-# 同时生成 .env.example（不含真实密码，供提交用）
+# 同时生成 .env.example（不含真实密码）
 sed 's/=.*/=/' .env.production | sed 's/REDIS_PASSWORD=/REDIS_PASSWORD=redis123/' | sed 's/POSTGRES_PASSWORD=/POSTGRES_PASSWORD=postgres123/' > .env.example
 ```
 
@@ -65,7 +88,7 @@ sed 's/=.*/=/' .env.production | sed 's/REDIS_PASSWORD=/REDIS_PASSWORD=redis123/
 
 以下模板中的 `<PREFIX>` 替换为项目前缀，`<PORT>` 替换为监听端口。
 
-### compose.infra.yml — 基础设施
+### compose.infra.yml
 
 ```yaml
 # 基础设施配置 — PostgreSQL + Redis
@@ -120,7 +143,7 @@ networks:
     external: true
 ```
 
-### compose.production.yml — 生产环境（Nginx + stable-app）
+### compose.production.yml
 
 ```yaml
 # 生产环境 — Nginx 网关 + stable 应用
@@ -151,7 +174,7 @@ networks:
     external: true
 ```
 
-### compose.canary.yml — 金丝雀环境
+### compose.canary.yml
 
 ```yaml
 # 金丝雀环境 — canary 应用
@@ -242,56 +265,28 @@ CMD ["node", "apps/app/server.js"]
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 ```
 
-## 步骤 4：启动基础设施
+## 构建完成后
 
-```bash
-podman network create <PREFIX>-network
+文件已全部生成。**不自动启动服务**。提示用户后续步骤：
 
-podman-compose --env-file .env.production -f compose.infra.yml up -d
-
-# 等待 Postgres 就绪（首次启动约 30s）
-for i in $(seq 1 15); do
-  podman exec <PREFIX>-postgres pg_isready -U xingye -d master_db 2>/dev/null && break
-  sleep 2
-done
-
-# 验证 Redis
-podman exec <PREFIX>-redis redis-cli -a ${REDIS_PASSWORD} ping
 ```
+========================================
+  ✓ 项目结构构建完成
+========================================
+  前缀:     <PREFIX>
+  端口:     <PORT>
 
-## 步骤 5：构建镜像并启动生产环境
+后续步骤:
+  1. 上传 dist 产物到 dist/bundle/
+     scp -r ./dist/bundle user@server:<项目目录>/
 
-```bash
-# 构建应用镜像
-podman build -t <PREFIX>:stable .
+  2. 启动和验证服务
+     "按照 docs/guide/verification.md 启动并验证项目 <PREFIX> 端口 <PORT>"
 
-# 启动 Nginx + stable-app
-podman-compose --env-file .env.production -f compose.production.yml up -d
-
-# 验证
-sleep 2
-curl -s http://localhost:<PORT>/health
+  3. 或者手动执行:
+     podman network create <PREFIX>-network
+     podman-compose --env-file .env.production -f compose.infra.yml up -d
+     podman build -t <PREFIX>:stable .
+     podman-compose --env-file .env.production -f compose.production.yml up -d
+========================================
 ```
-
-## 部署后日常操作
-
-部署完成后，以下操作直接通过对话执行（无需引用部署指南）：
-
-| 操作 | 对话示例 |
-|------|---------|
-| 改名 | "改名 newapp" |
-| 灰度 | "设置 canary 权重 30%" · "promote canary" · "rollback canary" |
-| Nginx | "修改端口为 8443" · "添加 location /api" · "配置 SSL" |
-| 密码 | "重新生成 Redis 密码" · "一键轮转所有密码" |
-| 帮助 | "怎么用" |
-
-## 故障排查
-
-| 问题 | 解决方法 |
-|------|---------|
-| `podman network create` 报 "already exists" | 忽略，网络已存在 |
-| Postgres 启动超时 | 首次需 30s+，检查 `podman logs <PREFIX>-postgres` |
-| Nginx 502 | `podman logs <PREFIX>-nginx`，检查 upstream DNS |
-| `dist/bundle/` 缺失 | 从 monorepo 构建：`cd apps/app && npx next build` |
-| 端口冲突 | 停止旧容器：`podman stop <name> && podman rm <name>` |
-| 容器名冲突 | 使用不同 `PREFIX` 为新项目 |
